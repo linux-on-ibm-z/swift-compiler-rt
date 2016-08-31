@@ -117,9 +117,9 @@ void __asan_poison_memory_region(void const volatile *addr, uptr size) {
   ShadowSegmentEndpoint beg(beg_addr);
   ShadowSegmentEndpoint end(end_addr);
   if (beg.chunk == end.chunk) {
-    CHECK(beg.offset < end.offset);
+    CHECK_LT(beg.offset, end.offset);
     s8 value = beg.value;
-    CHECK(value == end.value);
+    CHECK_EQ(value, end.value);
     // We can only poison memory if the byte in end.offset is unaddressable.
     // No need to re-poison memory if it is poisoned already.
     if (value > 0 && value <= end.offset) {
@@ -131,7 +131,7 @@ void __asan_poison_memory_region(void const volatile *addr, uptr size) {
     }
     return;
   }
-  CHECK(beg.chunk < end.chunk);
+  CHECK_LT(beg.chunk, end.chunk);
   if (beg.offset > 0) {
     // Mark bytes from beg.offset as unaddressable.
     if (beg.value == 0) {
@@ -157,9 +157,9 @@ void __asan_unpoison_memory_region(void const volatile *addr, uptr size) {
   ShadowSegmentEndpoint beg(beg_addr);
   ShadowSegmentEndpoint end(end_addr);
   if (beg.chunk == end.chunk) {
-    CHECK(beg.offset < end.offset);
+    CHECK_LT(beg.offset, end.offset);
     s8 value = beg.value;
-    CHECK(value == end.value);
+    CHECK_EQ(value, end.value);
     // We unpoison memory bytes up to enbytes up to end.offset if it is not
     // unpoisoned already.
     if (value != 0) {
@@ -167,7 +167,7 @@ void __asan_unpoison_memory_region(void const volatile *addr, uptr size) {
     }
     return;
   }
-  CHECK(beg.chunk < end.chunk);
+  CHECK_LT(beg.chunk, end.chunk);
   if (beg.offset > 0) {
     *beg.chunk = 0;
     beg.chunk++;
@@ -315,11 +315,13 @@ static void PoisonAlignedStackMemory(uptr addr, uptr size, bool do_poison) {
 }
 
 void __asan_poison_stack_memory(uptr addr, uptr size) {
+  if (!__asan_option_detect_stack_use_after_scope) return;
   VReport(1, "poisoning: %p %zx\n", (void *)addr, size);
   PoisonAlignedStackMemory(addr, size, true);
 }
 
 void __asan_unpoison_stack_memory(uptr addr, uptr size) {
+  if (!__asan_option_detect_stack_use_after_scope) return;
   VReport(1, "unpoisoning: %p %zx\n", (void *)addr, size);
   PoisonAlignedStackMemory(addr, size, false);
 }

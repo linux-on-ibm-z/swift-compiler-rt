@@ -15,7 +15,7 @@
 // See https://github.com/google/sanitizers/issues/209 for the details.
 //===----------------------------------------------------------------------===//
 
-// Only compile this code when buidling asan_dll_thunk.lib
+// Only compile this code when building asan_dll_thunk.lib
 // Using #ifdef rather than relying on Makefiles etc.
 // simplifies the build procedure.
 #ifdef ASAN_DLL_THUNK
@@ -198,9 +198,11 @@ static void InterceptHooks();
 // Don't use the INTERFACE_FUNCTION machinery for this function as we actually
 // want to call it in the __asan_init interceptor.
 WRAP_W_V(__asan_should_detect_stack_use_after_return)
+WRAP_W_V(__asan_should_detect_stack_use_after_scope)
 
 extern "C" {
   int __asan_option_detect_stack_use_after_return;
+  int __asan_option_detect_stack_use_after_scope;
 
   // Manually wrap __asan_init as we need to initialize
   // __asan_option_detect_stack_use_after_return afterwards.
@@ -214,6 +216,8 @@ extern "C" {
     fn();
     __asan_option_detect_stack_use_after_return =
         (__asan_should_detect_stack_use_after_return() != 0);
+    __asan_option_detect_stack_use_after_scope =
+        (__asan_should_detect_stack_use_after_scope() != 0);
 
     InterceptHooks();
   }
@@ -316,7 +320,7 @@ INTERFACE_FUNCTION(__sanitizer_cov_trace_switch)
 INTERFACE_FUNCTION(__sanitizer_cov_with_check)
 INTERFACE_FUNCTION(__sanitizer_get_allocated_size)
 INTERFACE_FUNCTION(__sanitizer_get_coverage_guards)
-INTERFACE_FUNCTION(__sanitizer_get_coverage_pc_buffer)
+INTERFACE_FUNCTION(__sanitizer_get_coverage_pc_buffer_pos)
 INTERFACE_FUNCTION(__sanitizer_get_current_allocated_bytes)
 INTERFACE_FUNCTION(__sanitizer_get_estimated_allocated_size)
 INTERFACE_FUNCTION(__sanitizer_get_free_bytes)
@@ -334,6 +338,7 @@ INTERFACE_FUNCTION(__sanitizer_reset_coverage)
 INTERFACE_FUNCTION(__sanitizer_get_number_of_counters)
 INTERFACE_FUNCTION(__sanitizer_update_counter_bitset_and_clear_counters)
 INTERFACE_FUNCTION(__sanitizer_sandbox_on_notify)
+INTERFACE_FUNCTION(__sanitizer_set_coverage_pc_buffer)
 INTERFACE_FUNCTION(__sanitizer_set_death_callback)
 INTERFACE_FUNCTION(__sanitizer_set_report_path)
 INTERFACE_FUNCTION(__sanitizer_set_report_fd)
@@ -380,6 +385,10 @@ WRAP_W_W(_expand_dbg)
 
 INTERCEPT_LIBRARY_FUNCTION(atoi);
 INTERCEPT_LIBRARY_FUNCTION(atol);
+
+#ifdef _WIN64
+INTERCEPT_LIBRARY_FUNCTION(__C_specific_handler);
+#else
 INTERCEPT_LIBRARY_FUNCTION(_except_handler3);
 
 // _except_handler4 checks -GS cookie which is different for each module, so we
@@ -388,6 +397,7 @@ INTERCEPTOR(int, _except_handler4, void *a, void *b, void *c, void *d) {
   __asan_handle_no_return();
   return REAL(_except_handler4)(a, b, c, d);
 }
+#endif
 
 INTERCEPT_LIBRARY_FUNCTION(frexp);
 INTERCEPT_LIBRARY_FUNCTION(longjmp);
@@ -420,7 +430,9 @@ INTERCEPT_LIBRARY_FUNCTION(wcslen);
 // is defined.
 void InterceptHooks() {
   INTERCEPT_HOOKS();
+#ifndef _WIN64
   INTERCEPT_FUNCTION(_except_handler4);
+#endif
 }
 
 // We want to call __asan_init before C/C++ initializers/constructors are
